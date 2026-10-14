@@ -23,3 +23,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE: ${{ inputs.source || 'macfancontrol/macfancontrol' }}
         run: python3 sync.py --source "$SOURCE"
+      - name: Keep the compatibility schedule active
+        run: |
+          date -u +%Y-%m > .last-successful-sync-month
+          git add .last-successful-sync-month
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Record successful compatibility synchronization'
+            git push
+          fi
