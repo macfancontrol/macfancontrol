@@ -50,7 +50,7 @@ def sync(source, target):
                              'https://github.com/macfancontrol/macfancontrol\n\n' + (release['body'] or ''))
             if dest is None:
                 gh('release', 'create', tag, '-R', target, '--draft', '--title', release['name'] or tag, '--notes-file', str(notes))
-                dest = api(f'repos/{target}/releases/tags/{tag}')
+                dest = next(r for r in api(f'repos/{target}/releases?per_page=100') if r['tag_name'] == tag)
             assets = {a['name']: a for a in dest['assets']}
             for asset in release['assets']:
                 name = asset['name']
@@ -65,7 +65,7 @@ def sync(source, target):
                     raise ValueError('Source checksum mismatch: ' + name)
                 gh('release', 'upload', tag, str(path), '-R', target, '--clobber')
                 # A download from the destination verifies the actual published bytes.
-                uploaded = api(f'repos/{target}/releases/tags/{tag}')
+                uploaded = api(f'repos/{target}/releases/{dest["id"]}')
                 copied = next(a for a in uploaded['assets'] if a['name'] == name)
                 # Draft attachments require authenticated download through gh.
                 verify = root / 'verified'
