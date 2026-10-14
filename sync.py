@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import time
 import urllib.request
 
 
@@ -48,9 +49,15 @@ def sync(source, target):
             notes = root / 'notes.md'
             notes.write_text('> MacFanControl 官方旧版升级入口。主仓库 / Main repository: '
                              'https://github.com/macfancontrol/macfancontrol\n\n' + (release['body'] or ''))
+            if dest and not dest['draft'] and dest.get('body') == notes.read_text() and dest['name'] == (release['name'] or tag):
+                current = {a['name']: a for a in dest['assets']}
+                if all(a.get('digest') and current.get(a['name'], {}).get('digest') == a['digest']
+                       and current[a['name']]['size'] == a['size'] for a in release['assets']):
+                    print(f'Already verified {tag}', flush=True)
+                    continue
             if dest is None:
-                gh('release', 'create', tag, '-R', target, '--draft', '--title', release['name'] or tag, '--notes-file', str(notes))
-                dest = next(r for r in api(f'repos/{target}/releases?per_page=100') if r['tag_name'] == tag)
+                dest = json.loads(subprocess.check_output(['gh', 'api', '--method', 'POST', f'repos/{target}/releases', '--input', '-'],
+                    input=json.dumps({'tag_name': tag, 'draft': True, 'name': release['name'] or tag, 'body': notes.read_text()}), text=True))
             assets = {a['name']: a for a in dest['assets']}
             for asset in release['assets']:
                 name = asset['name']
@@ -65,8 +72,6 @@ def sync(source, target):
                     raise ValueError('Source checksum mismatch: ' + name)
                 gh('release', 'upload', tag, str(path), '-R', target, '--clobber')
                 # A download from the destination verifies the actual published bytes.
-                uploaded = api(f'repos/{target}/releases/{dest["id"]}')
-                copied = next(a for a in uploaded['assets'] if a['name'] == name)
                 # Draft attachments require authenticated download through gh.
                 verify = root / 'verified'
                 verify.mkdir(exist_ok=True)
